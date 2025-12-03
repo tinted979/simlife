@@ -2,6 +2,8 @@
 
 SimLife is a high-performance [Conway's Game of Life](https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life) simulator written in the [Odin programming language](https://odin-lang.org/). It features a graphical interactive mode powered by Raylib and a headless benchmark mode for performance testing.
 
+![Demo](https://files.catbox.moe/xw0uq4.gif)
+
 ## Features
 
 - **Look-Up Table**: Pre-calculated LUT for all possible Cell States.
