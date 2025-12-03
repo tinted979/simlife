@@ -84,124 +84,124 @@ main :: proc() {
 
 run_benchmark :: proc(
 	state: ^simulator.State,
-	grid_width: int,
-	grid_height: int,
+	gridWidth: int,
+	gridHeight: int,
 	generations: int,
 ) {
 	fmt.printf(
 		"Running benchmark for %d generations on a %d x %d grid...\n",
 		generations,
-		grid_width,
-		grid_height,
+		gridWidth,
+		gridHeight,
 	)
 
-	sw: time.Stopwatch
-	time.stopwatch_start(&sw)
+	stopwatch: time.Stopwatch
+	time.stopwatch_start(&stopwatch)
 
 	spall.SCOPED_EVENT(&spall_ctx, &spall_buffer, "Benchmark Loop")
 
-	for i in 0 ..< generations {
+	for generationIndex in 0 ..< generations {
 		spall.SCOPED_EVENT(&spall_ctx, &spall_buffer, "Step")
 		simulator.step(state)
 	}
 
-	time.stopwatch_stop(&sw)
-	duration := time.stopwatch_duration(sw)
-	ms := time.duration_milliseconds(duration)
+	time.stopwatch_stop(&stopwatch)
+	duration := time.stopwatch_duration(stopwatch)
+	elapsedMilliseconds := time.duration_milliseconds(duration)
 
-	fmt.printf("Completed in %f ms\n", ms)
-	fmt.printf("Average per gen: %f ms\n", ms / f64(generations))
+	fmt.printf("Completed in %f ms\n", elapsedMilliseconds)
+	fmt.printf("Average per gen: %f ms\n", elapsedMilliseconds / f64(generations))
 }
 
 run_interactive :: proc(
 	state: ^simulator.State,
-	screen_width: int,
-	screen_height: int,
-	grid_width: int,
-	grid_height: int,
+	screenWidth: int,
+	screenHeight: int,
+	gridWidth: int,
+	gridHeight: int,
 ) {
-	rl.InitWindow(i32(screen_width), i32(screen_height), "SimLife")
+	rl.InitWindow(i32(screenWidth), i32(screenHeight), "SimLife")
 	defer rl.CloseWindow()
 
 	rl.SetTargetFPS(60)
 
-	pixel_data := make([]rl.Color, grid_width * grid_height)
-	defer delete(pixel_data)
+	pixelBuffer := make([]rl.Color, gridWidth * gridHeight)
+	defer delete(pixelBuffer)
 
-	base_img := rl.GenImageColor(i32(grid_width), i32(grid_height), rl.BLACK)
-	texture := rl.LoadTextureFromImage(base_img)
-	rl.UnloadImage(base_img)
+	baseImage := rl.GenImageColor(i32(gridWidth), i32(gridHeight), rl.BLACK)
+	texture := rl.LoadTextureFromImage(baseImage)
+	rl.UnloadImage(baseImage)
 	defer rl.UnloadTexture(texture)
 
 	rl.SetTextureFilter(texture, .POINT)
 
-	source_rect := rl.Rectangle{0, 0, f32(grid_width), f32(grid_height)}
-	dest_rect := rl.Rectangle{0, 0, f32(screen_width), f32(screen_height)}
+	sourceRect := rl.Rectangle{0, 0, f32(gridWidth), f32(gridHeight)}
+	destRect := rl.Rectangle{0, 0, f32(screenWidth), f32(screenHeight)}
 
-	timer: f32
-	tick_rate: f32 = 0.00
+	stepTimer: f32
+	stepInterval: f32 = 0.00
 
 	// Performance Tracking
-	last_time := time.now()
-	accum_time: f32 = 0
-	frame_count := 0
-	update_count := 0
+	lastTime := time.now()
+	accumulatedTime: f32 = 0
+	frameCount := 0
+	updateCount := 0
 
-	fps_display := 0
-	ups_display := 0
-	step_time_display: f64 = 0
+	fpsDisplay := 0
+	upsDisplay := 0
+	stepTimeDisplay: f64 = 0
 	for !rl.WindowShouldClose() {
 		spall.SCOPED_EVENT(&spall_ctx, &spall_buffer, "Frame")
 
-		dt := rl.GetFrameTime()
-		timer += dt
-		accum_time += dt
-		frame_count += 1
+		deltaTime := rl.GetFrameTime()
+		stepTimer += deltaTime
+		accumulatedTime += deltaTime
+		frameCount += 1
 
-		if accum_time >= 1.0 {
-			fps_display = frame_count
-			ups_display = update_count
-			frame_count = 0
-			update_count = 0
-			accum_time -= 1.0
+		if accumulatedTime >= 1.0 {
+			fpsDisplay = frameCount
+			upsDisplay = updateCount
+			frameCount = 0
+			updateCount = 0
+			accumulatedTime -= 1.0
 
 			// Update window title with stats
-			title := fmt.ctprintf(
+			windowTitle := fmt.ctprintf(
 				"SimLife - FPS: %d | UPS: %d | Sim Time: %.3f ms",
-				fps_display,
-				ups_display,
-				step_time_display,
+				fpsDisplay,
+				upsDisplay,
+				stepTimeDisplay,
 			)
-			rl.SetWindowTitle(title)
+			rl.SetWindowTitle(windowTitle)
 		}
 
-		if timer >= tick_rate {
-			sw: time.Stopwatch
-			time.stopwatch_start(&sw)
+		if stepTimer >= stepInterval {
+			stopwatch: time.Stopwatch
+			time.stopwatch_start(&stopwatch)
 
 			simulator.step(state)
 
-			time.stopwatch_stop(&sw)
-			step_time_display = time.duration_milliseconds(time.stopwatch_duration(sw))
+			time.stopwatch_stop(&stopwatch)
+			stepTimeDisplay = time.duration_milliseconds(time.stopwatch_duration(stopwatch))
 
-			timer = 0
-			update_count += 1
+			stepTimer = 0
+			updateCount += 1
 		}
 
-		p_idx := 0
-		for y in 1 ..= grid_height {
-			row_offset := y * (grid_width + 2)
-			for x in 1 ..= grid_width {
-				val := state.curr.data[row_offset + x]
-				pixel_data[p_idx] = val == 1 ? rl.WHITE : rl.BLACK
-				p_idx += 1
+		pixelIndex := 0
+		for y in 1 ..= gridHeight {
+			rowOffset := y * (gridWidth + 2)
+			for x in 1 ..= gridWidth {
+				cellValue := state.curr.data[rowOffset + x]
+				pixelBuffer[pixelIndex] = cellValue == 1 ? rl.WHITE : rl.BLACK
+				pixelIndex += 1
 			}
 		}
 
-		rl.UpdateTexture(texture, raw_data(pixel_data))
+		rl.UpdateTexture(texture, raw_data(pixelBuffer))
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
-		rl.DrawTexturePro(texture, source_rect, dest_rect, rl.Vector2{0, 0}, 0, rl.WHITE)
+		rl.DrawTexturePro(texture, sourceRect, destRect, rl.Vector2{0, 0}, 0, rl.WHITE)
 		rl.EndDrawing()
 	}
 }

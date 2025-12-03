@@ -5,122 +5,122 @@ import "core:math/rand"
 import "core:mem"
 
 @(private)
-RULES_LUT: [32]u8
+CONWAY_RULES_LUT: [32]u8
 
 Grid :: struct {
 	data: []u8,
 }
 
 State :: struct {
-	curr:           Grid,
-	next:           Grid,
-	generation:     u64,
-	grid_w, grid_h: int,
-	pad_w, pad_h:   int,
+	curr:                         Grid,
+	next:                         Grid,
+	generation:                   u64,
+	gridWidth, gridHeight:        int,
+	paddedWidth, paddedHeight:    int,
 }
 
-init :: proc(width: int, height: int) -> (s: State, err: mem.Allocator_Error) {
+init :: proc(width: int, height: int) -> (state: State, err: mem.Allocator_Error) {
 	init_rules_lut()
-	s.grid_w = width
-	s.grid_h = height
-	s.pad_w = width + 2
-	s.pad_h = height + 2
-	s.curr.data = make([]u8, s.pad_w * s.pad_h) or_return
-	s.next.data = make([]u8, s.pad_w * s.pad_h) or_return
-	randomize(&s)
+	state.gridWidth = width
+	state.gridHeight = height
+	state.paddedWidth = width + 2
+	state.paddedHeight = height + 2
+	state.curr.data = make([]u8, state.paddedWidth * state.paddedHeight) or_return
+	state.next.data = make([]u8, state.paddedWidth * state.paddedHeight) or_return
+	randomize(&state)
 	return
 }
 
-destroy :: proc(s: ^State) {
-	delete(s.curr.data)
-	delete(s.next.data)
+destroy :: proc(state: ^State) {
+	delete(state.curr.data)
+	delete(state.next.data)
 }
 
-randomize :: proc(s: ^State) {
-	for y in 1 ..= s.grid_h {
-		offset := y * s.pad_w
-		for x in 1 ..= s.grid_w {
+randomize :: proc(state: ^State) {
+	for y in 1 ..= state.gridHeight {
+		rowOffset := y * state.paddedWidth
+		for x in 1 ..= state.gridWidth {
 			// ~20% chance of being alive
-			s.curr.data[offset + x] = rand.float32() > 0.5 ? 1 : 0
+			state.curr.data[rowOffset + x] = rand.float32() > 0.5 ? 1 : 0
 		}
 	}
 }
 
-step :: proc(s: ^State) #no_bounds_check {
-	update_ghost_cells(s)
+step :: proc(state: ^State) #no_bounds_check {
+	update_ghost_cells(state)
 
 	// Iterate through rows
-	for y in 1 ..= s.grid_h {
+	for y in 1 ..= state.gridHeight {
 		// Calculate offsets for relative rows
-		offset_up := (y - 1) * s.pad_w
-		offset_curr := y * s.pad_w
-		offset_down := (y + 1) * s.pad_w
+		rowAboveOffset := (y - 1) * state.paddedWidth
+		currentRowOffset := y * state.paddedWidth
+		rowBelowOffset := (y + 1) * state.paddedWidth
 
 		// Get pointers to the rows
-		row_up := raw_data(s.curr.data[offset_up:])
-		row_curr := raw_data(s.curr.data[offset_curr:])
-		row_down := raw_data(s.curr.data[offset_down:])
+		rowAbove := raw_data(state.curr.data[rowAboveOffset:])
+		currentRow := raw_data(state.curr.data[currentRowOffset:])
+		rowBelow := raw_data(state.curr.data[rowBelowOffset:])
 
 		// Get pointer to the next row
-		row_next := raw_data(s.next.data[offset_curr:])
+		nextStateRow := raw_data(state.next.data[currentRowOffset:])
 
 		// Iterate through columns
-		for x in 1 ..= s.grid_w {
+		for x in 1 ..= state.gridWidth {
 			// Calculate sum of neighbors
-			n_sum := 0
-			n_sum += int(row_up[x - 1]) + int(row_up[x]) + int(row_up[x + 1])
-			n_sum += int(row_curr[x - 1]) + int(row_curr[x + 1])
-			n_sum += int(row_down[x - 1]) + int(row_down[x]) + int(row_down[x + 1])
+			neighborCount := 0
+			neighborCount += int(rowAbove[x - 1]) + int(rowAbove[x]) + int(rowAbove[x + 1])
+			neighborCount += int(currentRow[x - 1]) + int(currentRow[x + 1])
+			neighborCount += int(rowBelow[x - 1]) + int(rowBelow[x]) + int(rowBelow[x + 1])
 
 			// Map cell state and sum of neighbors to LUT index
-			is_alive := int(row_curr[x])
-			lut_index := (n_sum * 2) + is_alive
+			isAlive := int(currentRow[x])
+			lutIndex := (neighborCount * 2) + isAlive
 			// Get new state from LUT
-			row_next[x] = RULES_LUT[lut_index]
+			nextStateRow[x] = CONWAY_RULES_LUT[lutIndex]
 		}
 	}
 
 	// Swap pointers and increment generation
-	s.curr, s.next = s.next, s.curr
-	s.generation += 1
+	state.curr, state.next = state.next, state.curr
+	state.generation += 1
 }
 
 @(private)
-update_ghost_cells :: proc(s: ^State) #no_bounds_check {
-	grid := &s.curr
+update_ghost_cells :: proc(state: ^State) #no_bounds_check {
+	grid := &state.curr
 
 	// Iterate through rows
-	for y in 1 ..= s.grid_h {
-		row_start := y * s.pad_w
+	for y in 1 ..= state.gridHeight {
+		rowStart := y * state.paddedWidth
 		// Left ghost cell gets rightmost real column
-		grid.data[row_start] = grid.data[row_start + s.grid_w]
+		grid.data[rowStart] = grid.data[rowStart + state.gridWidth]
 		// Right ghost cell gets leftmost real column
-		grid.data[row_start + (s.pad_w - 1)] = grid.data[row_start + 1]
+		grid.data[rowStart + (state.paddedWidth - 1)] = grid.data[rowStart + 1]
 	}
 
 	// Copy bottom real row to top ghost row
-	top_dest := &grid.data[0]
-	bottom_src := &grid.data[s.grid_h * s.pad_w]
-	mem.copy(top_dest, bottom_src, s.pad_w)
+	topGhostRowDest := &grid.data[0]
+	bottomRealRowSrc := &grid.data[state.gridHeight * state.paddedWidth]
+	mem.copy(topGhostRowDest, bottomRealRowSrc, state.paddedWidth)
 
 	// Copy top real row to bottom ghost row
-	bottom_dest := &grid.data[(s.pad_h - 1) * s.pad_w]
-	top_src := &grid.data[1 * s.pad_w]
-	mem.copy(bottom_dest, top_src, s.pad_w)
+	bottomGhostRowDest := &grid.data[(state.paddedHeight - 1) * state.paddedWidth]
+	topRealRowSrc := &grid.data[1 * state.paddedWidth]
+	mem.copy(bottomGhostRowDest, topRealRowSrc, state.paddedWidth)
 }
 
 @(private)
 init_rules_lut :: proc() {
-	for neighbors in 0 ..= 8 {
-		for state in 0 ..= 1 {
-			alive := false
-			if state == 1 {
-				if neighbors == 2 || neighbors == 3 do alive = true
+	for neighborCount in 0 ..= 8 {
+		for cellState in 0 ..= 1 {
+			willBeAlive := false
+			if cellState == 1 {
+				if neighborCount == 2 || neighborCount == 3 do willBeAlive = true
 			} else {
-				if neighbors == 3 do alive = true
+				if neighborCount == 3 do willBeAlive = true
 			}
-			idx := (neighbors * 2) + state
-			RULES_LUT[idx] = alive ? 1 : 0
+			lutIndex := (neighborCount * 2) + cellState
+			CONWAY_RULES_LUT[lutIndex] = willBeAlive ? 1 : 0
 		}
 	}
 }
