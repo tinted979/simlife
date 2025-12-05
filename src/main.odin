@@ -82,12 +82,7 @@ main :: proc() {
 	}
 }
 
-run_benchmark :: proc(
-	state: ^simulator.State,
-	gridWidth: int,
-	gridHeight: int,
-	generations: int,
-) {
+run_benchmark :: proc(state: ^simulator.State, gridWidth: int, gridHeight: int, generations: int) {
 	fmt.printf(
 		"Running benchmark for %d generations on a %d x %d grid...\n",
 		generations,
