@@ -42,14 +42,15 @@ odin run src/ -o:speed -- -bench -gen=1000
 
 ---
 
-## 🎯 Two Versions Provided
+## 🎯 Three Versions Provided
 
-| File | Uses `#run`? | Works in Your Odin? |
-|------|--------------|---------------------|
-| `core_refactored.odin` | ✅ Yes | ❌ No (syntax error) |
-| `core_refactored_v2.odin` | ❌ No | ✅ Yes (direct init) |
+| File | Uses `#run`? | Type-Safe Cells? | Recommended |
+|------|--------------|------------------|-------------|
+| `core_refactored.odin` | ✅ Yes | ❌ No | If `#run` works |
+| `core_refactored_v2.odin` | ❌ No | ❌ No | Good |
+| `core_refactored_v3.odin` | ❌ No | ✅ Yes | ⭐ **BEST** |
 
-**Use v2!** It gives you all the same benefits without `#run`.
+**Use v3!** Type-safe cells + patterns + all benefits of v2.
 
 ---
 
