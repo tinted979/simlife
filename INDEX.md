@@ -2,10 +2,12 @@
 
 ## 🎯 START HERE
 
+**Got a `#run` syntax error?** → Read **`QUICK_FIX.md`** first! (5 min)
+
 **New to this refactor?** Start with:
-1. `LUT_REFACTOR_VISUAL_SUMMARY.md` - Quick visual overview (5 min)
-2. `REFACTOR_README.md` - Complete guide (10 min)
-3. `REFACTOR_EXAMPLE_LUT.md` - Detailed explanation (15 min)
+1. `START_HERE.md` - Overview and quick start (5 min)
+2. `QUICK_FIX.md` - Fix the `#run` error (5 min)
+3. `ODIN_VERSION_COMPATIBILITY.md` - Understand the alternatives (10 min)
 
 ## 📁 All Files
 
@@ -13,17 +15,21 @@
 
 | File | Purpose | Read Time | Priority |
 |------|---------|-----------|----------|
-| `REFACTOR_README.md` | Main entry point, migration guide | 10 min | ⭐⭐⭐ |
-| `LUT_REFACTOR_VISUAL_SUMMARY.md` | Visual before/after comparison | 5 min | ⭐⭐⭐ |
+| `START_HERE.md` | Overview and navigation guide | 5 min | ⭐⭐⭐ |
+| `QUICK_FIX.md` | Fix the `#run` syntax error | 5 min | ⭐⭐⭐ |
+| `ODIN_VERSION_COMPATIBILITY.md` | Explain `#run` alternatives | 10 min | ⭐⭐⭐ |
+| `LUT_REFACTOR_VISUAL_SUMMARY.md` | Visual before/after comparison | 5 min | ⭐⭐ |
+| `REFACTOR_README.md` | Complete guide (original) | 10 min | ⭐⭐ |
 | `REFACTOR_EXAMPLE_LUT.md` | Detailed refactor explanation | 15 min | ⭐⭐ |
-| `LUT_REFACTOR_COMPARISON.md` | Side-by-side code comparison | 10 min | ⭐⭐ |
+| `LUT_REFACTOR_COMPARISON.md` | Side-by-side code comparison | 10 min | ⭐ |
 | `INDEX.md` | This file - quick reference | 2 min | ⭐ |
 
 ### Code Files
 
 | File | Purpose | Type | Priority |
 |------|---------|------|----------|
-| `src/simulator/core_refactored.odin` | Drop-in replacement | Implementation | ⭐⭐⭐ |
+| `src/simulator/core_refactored_v2.odin` | **USE THIS** - No `#run` needed | Implementation | ⭐⭐⭐ |
+| `src/simulator/core_refactored.odin` | Original (requires `#run` support) | Implementation | ⭐ |
 | `tests/lut_test.odin` | Comprehensive test suite | Tests | ⭐⭐ |
 | `examples/inspect_lut.odin` | Interactive LUT inspector | Tool | ⭐ |
 
