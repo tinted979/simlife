@@ -1,140 +1,142 @@
 package main
 
-import "config"
+import "base:runtime"
 import "core:flags"
 import "core:fmt"
 import "core:mem"
 import "core:os"
-import "core:prof/spall"
-import "core:sync"
 import "core:time"
-import "simulator"
+
+import dbg "debug"
+import sim "simulator"
 import rl "vendor:raylib"
 
-spall_ctx: spall.Context
-@(thread_local)
-spall_buffer: spall.Buffer
-
-Arguments :: struct {
-	screen_width:  int `args:"name=width,  usage=Window width in pixels"`,
-	screen_height: int `args:"name=height, usage=Window height in pixels"`,
-	grid_width:    int `args:"name=grid-w, usage=Simulation grid width"`,
-	grid_height:   int `args:"name=grid-h, usage=Simulation grid height"`,
-	generations:   int `args:"name=gen,    usage=Number of generations to simulate in benchmark"`,
-	benchmark:     bool `args:"name=bench, usage=Run benchmark mode"`,
-}
-
 main :: proc() {
-	when ODIN_DEBUG {
-		track: mem.Tracking_Allocator
-		mem.tracking_allocator_init(&track, context.allocator)
-		context.allocator = mem.tracking_allocator(&track)
+	debug_state := dbg.init()
+	defer dbg.destroy(debug_state)
 
-		defer {
-			if len(track.allocation_map) > 0 {
-				fmt.println(len(track.allocation_map), "allocations not freed")
-				for _, entry in track.allocation_map {
-					fmt.println(entry.size, "bytes at", entry.location)
-				}
-			}
-
-			mem.tracking_allocator_destroy(&track)
-		}
-	}
-
-	spall_ctx = spall.context_create("game_of_life.spall")
-	defer spall.context_destroy(&spall_ctx)
-
-	buffer_backing := make([]u8, spall.BUFFER_DEFAULT_SIZE)
-	defer delete(buffer_backing)
-
-	spall_buffer = spall.buffer_create(buffer_backing, u32(sync.current_thread_id()))
-	defer spall.buffer_destroy(&spall_ctx, &spall_buffer)
-
-	args := Arguments {
-		screen_width  = config.DEFAULT_SCREEN_W,
-		screen_height = config.DEFAULT_SCREEN_H,
-		grid_width    = config.DEFAULT_GRID_W,
-		grid_height   = config.DEFAULT_GRID_H,
-		generations   = config.DEFAULT_GENERATIONS,
-		benchmark     = false,
-	}
-
-	flags.parse_or_exit(&args, os.args)
-
-	state, err := simulator.init(args.grid_width, args.grid_height)
-	if err != nil {
-		fmt.println("Failed to initialize state:", err)
+	args := parse_args_or_exit()
+	if args.benchmark {
+		run_benchmark(args)
+		return
+	} else {
+		run_interactive(args)
 		return
 	}
-	defer simulator.destroy(&state)
-
-	if args.benchmark {
-		run_benchmark(&state, args.grid_width, args.grid_height, args.generations)
-	} else {
-		run_interactive(
-			&state,
-			args.screen_width,
-			args.screen_height,
-			args.grid_width,
-			args.grid_height,
-		)
-	}
 }
 
-run_benchmark :: proc(state: ^simulator.State, gridWidth: int, gridHeight: int, generations: int) {
+parse_args_or_exit :: proc() -> Args {
+	args, error := args_parse()
+	switch e in error {
+	case None:
+		return args
+	case Invalid_Generation_Count:
+		fmt.printfln(
+			"Invalid generation count - value: %d (min: %d, max: %d)",
+			e.value,
+			e.min_value,
+			e.max_value,
+		)
+		os.exit(1)
+	case Invalid_Generation_Interval:
+		fmt.printfln(
+			"Invalid generation interval - value: %d (min: %d, max: %d)",
+			e.value,
+			e.min_value,
+			e.max_value,
+		)
+		os.exit(1)
+	case Invalid_Screen_Width:
+		fmt.printfln(
+			"Invalid screen width - value: %d (min: %d, max: %d)",
+			e.value,
+			e.min_value,
+			e.max_value,
+		)
+		os.exit(1)
+	case Invalid_Screen_Height:
+		fmt.printfln(
+			"Invalid screen height - value: %d (min: %d, max: %d)",
+			e.value,
+			e.min_value,
+			e.max_value,
+		)
+		os.exit(1)
+	case Invalid_Grid_Width:
+		fmt.printfln(
+			"Invalid grid width - value: %d (min: %d, max: %d)",
+			e.value,
+			e.min_value,
+			e.max_value,
+		)
+		os.exit(1)
+	case Invalid_Grid_Height:
+		fmt.printfln(
+			"Invalid grid height - value: %d (min: %d, max: %d)",
+			e.value,
+			e.min_value,
+			e.max_value,
+		)
+		os.exit(1)
+	case flags.Error:
+		fmt.printfln("Flags error: %v", e)
+		os.exit(1)
+	}
+	return args
+}
+
+run_benchmark :: proc(args: Args) {
+	state := sim.init(args.grid_width, args.grid_height)
+	defer sim.destroy(state)
+
 	fmt.printf(
 		"Running benchmark for %d generations on a %d x %d grid...\n",
-		generations,
-		gridWidth,
-		gridHeight,
+		args.generation_count,
+		args.grid_width,
+		args.grid_height,
 	)
 
 	stopwatch: time.Stopwatch
 	time.stopwatch_start(&stopwatch)
 
-	spall.SCOPED_EVENT(&spall_ctx, &spall_buffer, "Benchmark Loop")
+	dbg.scoped_event("Benchmark Loop")
 
-	for generationIndex in 0 ..< generations {
-		spall.SCOPED_EVENT(&spall_ctx, &spall_buffer, "Step")
-		simulator.step(state)
+	for generation_index in 0 ..< args.generation_count {
+		dbg.scoped_event("Step")
+		sim.step(state)
 	}
 
 	time.stopwatch_stop(&stopwatch)
-	duration := time.stopwatch_duration(stopwatch)
-	elapsedMilliseconds := time.duration_milliseconds(duration)
+	elapsed_duration := time.stopwatch_duration(stopwatch)
+	elapsed_ms := time.duration_milliseconds(elapsed_duration)
 
-	fmt.printf("Completed in %f ms\n", elapsedMilliseconds)
-	fmt.printf("Average per gen: %f ms\n", elapsedMilliseconds / f64(generations))
+	fmt.printf("Completed in %f ms\n", elapsed_ms)
+	fmt.printf("Average per gen: %f ms\n", elapsed_ms / f64(args.generation_count))
 }
 
-run_interactive :: proc(
-	state: ^simulator.State,
-	screenWidth: int,
-	screenHeight: int,
-	gridWidth: int,
-	gridHeight: int,
-) {
-	rl.InitWindow(i32(screenWidth), i32(screenHeight), "SimLife")
+run_interactive :: proc(args: Args) {
+	state := sim.init(args.grid_width, args.grid_height)
+	defer sim.destroy(state)
+
+	rl.InitWindow(i32(args.screen_width), i32(args.screen_height), "SimLife")
 	defer rl.CloseWindow()
 
 	rl.SetTargetFPS(60)
 
-	pixelBuffer := make([]rl.Color, gridWidth * gridHeight)
+	pixelBuffer := make([]rl.Color, args.grid_width * args.grid_height)
 	defer delete(pixelBuffer)
 
-	baseImage := rl.GenImageColor(i32(gridWidth), i32(gridHeight), rl.BLACK)
+	baseImage := rl.GenImageColor(i32(args.grid_width), i32(args.grid_height), rl.BLACK)
 	texture := rl.LoadTextureFromImage(baseImage)
 	rl.UnloadImage(baseImage)
 	defer rl.UnloadTexture(texture)
 
 	rl.SetTextureFilter(texture, .POINT)
 
-	sourceRect := rl.Rectangle{0, 0, f32(gridWidth), f32(gridHeight)}
-	destRect := rl.Rectangle{0, 0, f32(screenWidth), f32(screenHeight)}
+	sourceRect := rl.Rectangle{0, 0, f32(args.grid_width), f32(args.grid_height)}
+	destRect := rl.Rectangle{0, 0, f32(args.screen_width), f32(args.screen_height)}
 
 	stepTimer: f32
-	stepInterval: f32 = 0.00
 
 	// Performance Tracking
 	lastTime := time.now()
@@ -146,7 +148,7 @@ run_interactive :: proc(
 	upsDisplay := 0
 	stepTimeDisplay: f64 = 0
 	for !rl.WindowShouldClose() {
-		spall.SCOPED_EVENT(&spall_ctx, &spall_buffer, "Frame")
+		dbg.scoped_event("Frame")
 
 		deltaTime := rl.GetFrameTime()
 		stepTimer += deltaTime
@@ -170,11 +172,17 @@ run_interactive :: proc(
 			rl.SetWindowTitle(windowTitle)
 		}
 
-		if stepTimer >= stepInterval {
+		if stepTimer >= f32(time.duration_seconds(args.generation_interval * time.Millisecond)) {
 			stopwatch: time.Stopwatch
 			time.stopwatch_start(&stopwatch)
 
-			simulator.step(state)
+			{
+				dbg.scoped_event("Step Loop")
+				for _ in 0 ..< args.generation_count {
+					dbg.scoped_event("Step")
+					sim.step(state)
+				}
+			}
 
 			time.stopwatch_stop(&stopwatch)
 			stepTimeDisplay = time.duration_milliseconds(time.stopwatch_duration(stopwatch))
@@ -183,13 +191,16 @@ run_interactive :: proc(
 			updateCount += 1
 		}
 
-		pixelIndex := 0
-		for y in 1 ..= gridHeight {
-			rowOffset := y * (gridWidth + 2)
-			for x in 1 ..= gridWidth {
-				cellValue := state.curr.data[rowOffset + x]
-				pixelBuffer[pixelIndex] = cellValue == 1 ? rl.WHITE : rl.BLACK
-				pixelIndex += 1
+		{
+			dbg.scoped_event("Draw Loop")
+			pixelIndex := 0
+			for y in 1 ..= args.grid_height {
+				rowOffset := y * (args.grid_width + 2)
+				for x in 1 ..= args.grid_width {
+					cellValue := state.curr.cells[rowOffset + x]
+					pixelBuffer[pixelIndex] = cellValue.state == .Alive ? rl.WHITE : rl.BLACK
+					pixelIndex += 1
+				}
 			}
 		}
 
