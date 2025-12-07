@@ -3,113 +3,105 @@ package simulator
 import "core:math/rand"
 import "core:mem"
 
-PADDING :: 2
+GRID_PADDING :: 2
 
-State :: struct {
-	curr:                        Grid,
-	next:                        Grid,
+Simulation :: struct {
+	current_state:               Grid,
+	next_state:                  Grid,
 	generation:                  u64,
 	grid_width, grid_height:     int,
 	padded_width, padded_height: int,
 }
 
-init :: proc(grid_width: int, grid_height: int) -> ^State {
-	state := new(State)
+init :: proc(grid_width: int, grid_height: int) -> (simulation: ^Simulation) {
+	simulation = new(Simulation)
 
-	setup_grid(state, grid_width, grid_height)
+	setup_grids(simulation, grid_width, grid_height)
 
-	randomize(state)
+	randomize(simulation)
 
-	return state
+	return simulation
 }
 
-destroy :: proc(state: ^State) {
-	if state == nil do return
+destroy :: proc(simulation: ^Simulation) {
+	if simulation == nil do return
 
-	grid_destroy(&state.curr)
-	grid_destroy(&state.next)
+	grid_destroy(&simulation.current_state)
+	grid_destroy(&simulation.next_state)
 
-	free(state)
+	free(simulation)
 }
 
-randomize :: proc(state: ^State) {
-	for y in 1 ..= state.grid_height {
-		row_offset := y * state.padded_width
-		for x in 1 ..= state.grid_width {
-			state.curr.cells[row_offset + x].state = rand.float32() > 0.5 ? .Alive : .Dead
+randomize :: proc(simulation: ^Simulation) {
+	for row_idx in 1 ..= simulation.grid_height {
+		row_offset := row_idx * simulation.padded_width
+		for col_idx in 1 ..= simulation.grid_width {
+			random_cell_state := rand.float32() > 0.5 ? CellState.Alive : CellState.Dead
+			simulation.current_state.cells[row_offset + col_idx].state = random_cell_state
 		}
 	}
 }
 
-step :: proc(state: ^State) #no_bounds_check {
-	update_ghost_cells(state)
+step :: proc(simulation: ^Simulation) #no_bounds_check {
+	update_ghost_cells(simulation)
 
-	for y in 1 ..= state.grid_height {
-		curr_above_ptr, curr_current_ptr, curr_below_ptr := grid_get_adjacent_row_ptrs(
-			&state.curr,
-			y,
+	for row_idx in 1 ..= simulation.grid_height {
+		above_row_ptr, current_row_ptr, below_row_ptr := grid_get_adjacent_row_ptrs(
+			&simulation.current_state,
+			row_idx,
 		)
-		next_row_ptr := grid_get_row_ptr(&state.next, y)
+		next_grid_row_ptr := grid_get_row_ptr(&simulation.next_state, row_idx)
 
-		for x in 1 ..= state.grid_width {
+		for col_idx in 1 ..= simulation.grid_width {
 			neighbor_count: int
 			neighbor_count +=
-				int(curr_above_ptr[x - 1].state) +
-				int(curr_above_ptr[x].state) +
-				int(curr_above_ptr[x + 1].state)
+				int(above_row_ptr[col_idx - 1].state) +
+				int(above_row_ptr[col_idx].state) +
+				int(above_row_ptr[col_idx + 1].state)
 			neighbor_count +=
-				int(curr_current_ptr[x - 1].state) + int(curr_current_ptr[x + 1].state)
+				int(current_row_ptr[col_idx - 1].state) + int(current_row_ptr[col_idx + 1].state)
 			neighbor_count +=
-				int(curr_below_ptr[x - 1].state) +
-				int(curr_below_ptr[x].state) +
-				int(curr_below_ptr[x + 1].state)
+				int(below_row_ptr[col_idx - 1].state) +
+				int(below_row_ptr[col_idx].state) +
+				int(below_row_ptr[col_idx + 1].state)
 
-			curr_state := curr_current_ptr[x].state
-			next_state := rules_get_next(neighbor_count, curr_state)
-			next_row_ptr[x].state = next_state
+			current_cell_state := current_row_ptr[col_idx].state
+			next_cell_state := rules_get_next(neighbor_count, current_cell_state)
+			next_grid_row_ptr[col_idx].state = next_cell_state
 		}
 	}
 
-	state.curr, state.next = state.next, state.curr
-	state.generation += 1
+	simulation.current_state, simulation.next_state =
+		simulation.next_state, simulation.current_state
+	simulation.generation += 1
 }
 
 @(private)
-setup_grid :: proc(state: ^State, grid_width: int, grid_height: int) {
-	state.grid_width = grid_width
-	state.grid_height = grid_height
-	state.padded_width = grid_width + PADDING
-	state.padded_height = grid_height + PADDING
+setup_grids :: proc(simulation: ^Simulation, grid_width: int, grid_height: int) {
+	simulation.grid_width = grid_width
+	simulation.grid_height = grid_height
+	simulation.padded_width = grid_width + GRID_PADDING
+	simulation.padded_height = grid_height + GRID_PADDING
 
-	grid_init(&state.curr, state.padded_width, state.padded_height)
-	grid_init(&state.next, state.padded_width, state.padded_height)
+	grid_init(&simulation.current_state, simulation.padded_width, simulation.padded_height)
+	grid_init(&simulation.next_state, simulation.padded_width, simulation.padded_height)
 }
 
 @(private)
-update_ghost_cells :: proc(state: ^State) #no_bounds_check {
-	grid := &state.curr
+update_ghost_cells :: proc(simulation: ^Simulation) #no_bounds_check {
+	current_grid := &simulation.current_state
 
-	/*for y in 1 ..= state.grid_height {
-		row_start := y * state.padded_width
-		grid_set_cell(grid, row_start, grid_get_cell(grid, row_start + state.grid_width)) // Left ghost cell gets rightmost real column
-		grid_set_cell(
-			grid,
-			row_start + (state.padded_width - 1),
-			grid_get_cell(grid, row_start + 1),
-		) // Right ghost cell gets leftmost real column
-	}*/
-
-	for y in 1 ..= state.grid_height {
-		row := grid_get_row_ptr(grid, y)
-		row[0] = row[state.grid_width] // Left ghost = rightmost real
-		row[state.padded_width - 1] = row[1] // Right ghost = leftmost real
+	for row_idx in 1 ..= simulation.grid_height {
+		current_row_ptr := grid_get_row_ptr(current_grid, row_idx)
+		current_row_ptr[0] = current_row_ptr[simulation.grid_width] // Left ghost = rightmost real
+		current_row_ptr[simulation.padded_width - 1] = current_row_ptr[1] // Right ghost = leftmost real
 	}
 
-	top_ghost_row_dest := grid_get_row_ptr(grid, 0)
-	bottom_real_row_src := grid_get_row_ptr(grid, state.grid_height)
-	mem.copy(top_ghost_row_dest, bottom_real_row_src, state.padded_width) // Copy bottom real row to top ghost row
+	top_ghost_row_ptr := grid_get_row_ptr(current_grid, 0)
+	bottom_real_row_ptr := grid_get_row_ptr(current_grid, simulation.grid_height)
+	mem.copy(top_ghost_row_ptr, bottom_real_row_ptr, simulation.padded_width) // Copy bottom real row to top ghost row
 
-	bottom_ghost_row_dest := grid_get_row_ptr(grid, state.padded_height - 1)
-	top_real_row_src := grid_get_row_ptr(grid, 1)
-	mem.copy(bottom_ghost_row_dest, top_real_row_src, state.padded_width) // Copy top real row to bottom ghost row
+	bottom_ghost_row_ptr := grid_get_row_ptr(current_grid, simulation.padded_height - 1)
+	top_real_row_ptr := grid_get_row_ptr(current_grid, 1)
+	mem.copy(bottom_ghost_row_ptr, top_real_row_ptr, simulation.padded_width) // Copy top real row to bottom ghost row
 }

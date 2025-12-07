@@ -197,7 +197,7 @@ run_interactive :: proc(args: Args) {
 			for y in 1 ..= args.grid_height {
 				rowOffset := y * (args.grid_width + 2)
 				for x in 1 ..= args.grid_width {
-					cellValue := state.curr.cells[rowOffset + x]
+					cellValue := state.current_state.cells[rowOffset + x]
 					pixelBuffer[pixelIndex] = cellValue.state == .Alive ? rl.WHITE : rl.BLACK
 					pixelIndex += 1
 				}
